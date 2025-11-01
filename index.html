@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <title>Snake Game</title>
+  <script src="/_sdk/element_sdk.js"></script>
+
+  <style></style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <script src="https://cdn.tailwindcss.com" type="text/javascript"></script>
+ </head>
+ <body>
+  <main class="game-container">
+   <h1 class="game-title" id="gameTitle">Snake Game</h1>
+   <div class="canvas-container">
+    <canvas class="game-canvas" id="gameCanvas" width="400" height="400"></canvas>
+    <div class="pause-overlay" id="pauseOverlay">
+     PAUSE
+    </div>
+   </div>
+   <div class="score-display" id="scoreDisplay">
+    Score: 0
+   </div>
+   <div class="controls-info"><strong>Contrôles:</strong><br>
+     🖥️ Flèches directionnelles • Espace pour pause<br>
+     📱 Glissez pour diriger le serpent
+   </div>
+  </main>
+  <div class="game-over-modal" id="gameOverModal">
+   <div class="modal-content">
+    <h2 class="modal-title" id="gameOverTitle">Game Over!</h2>
+    <div class="final-score" id="finalScore">
+     Score Final: 0
+    </div><button class="restart-btn" id="restartBtn">Nouvelle Partie</button>
+   </div>
+  </div>
+  <script>
+        const defaultConfig = {
+            game_title: "Snake Game",
+            score_text: "Score",
+            game_over_title: "Game Over!",
+            restart_button_text: "Nouvelle Partie",
+            pause_text: "PAUSE"
+        };
+
+        if (window.elementSdk) {
+            window.elementSdk.init({
+                defaultConfig,
+                onConfigChange: async (config) => {
+                    document.getElementById('gameTitle').textContent = config.game_title || defaultConfig.game_title;
+                    document.getElementById('pauseOverlay').textContent = config.pause_text || defaultConfig.pause_text;
+                    document.getElementById('gameOverTitle').textContent = config.game_over_title || defaultConfig.game_over_title;
+                    document.getElementById('restartBtn').textContent = config.restart_button_text || defaultConfig.restart_button_text;
+                    updateScoreDisplay();
+                },
+                mapToCapabilities: (config) => ({
+                    recolorables: [],
+                    borderables: [],
+                    fontEditable: undefined,
+                    fontSizeable: undefined
+                }),
+                mapToEditPanelValues: (config) => new Map([
+                    ["game_title", config.game_title || defaultConfig.game_title],
+                    ["score_text", config.score_text || defaultConfig.score_text],
+                    ["game_over_title", config.game_over_title || defaultConfig.game_over_title],
+                    ["restart_button_text", config.restart_button_text || defaultConfig.restart_button_text],
+                    ["pause_text", config.pause_text || defaultConfig.pause_text]
+                ])
+            });
+        }
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const box = 20;
+
+        let snake = [{x: 9 * box, y: 10 * box}];
+        let direction = "RIGHT";
+        let food = generateFood();
+        let score = 0;
+        let game;
+        let isPaused = false;
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        function generateFood() {
+            return {
+                x: Math.floor(Math.random() * 20) * box,
+                y: Math.floor(Math.random() * 20) * box
+            };
+        }
+
+        function updateScoreDisplay() {
+            const config = window.elementSdk ? window.elementSdk.config : defaultConfig;
+            const scoreText = config.score_text || defaultConfig.score_text;
+            document.getElementById('scoreDisplay').textContent = `${scoreText}: ${score}`;
+        }
+
+        document.addEventListener("keydown", changeDirection);
+        document.getElementById('restartBtn').addEventListener('click', restartGame);
+
+        canvas.addEventListener('touchstart', handleTouchStart, false);
+        canvas.addEventListener('touchmove', handleTouchMove, false);
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const firstTouch = e.touches[0];
+            touchStartX = firstTouch.clientX;
+            touchStartY = firstTouch.clientY;
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (!touchStartX || !touchStartY) return;
+
+            const touchEndX = e.touches[0].clientX;
+            const touchEndY = e.touches[0].clientY;
+
+            const diffX = touchStartX - touchEndX;
+            const diffY = touchStartY - touchEndY;
+
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0 && direction !== "RIGHT") {
+                    direction = "LEFT";
+                } else if (diffX < 0 && direction !== "LEFT") {
+                    direction = "RIGHT";
+                }
+            } else {
+                if (diffY > 0 && direction !== "DOWN") {
+                    direction = "UP";
+                } else if (diffY < 0 && direction !== "UP") {
+                    direction = "DOWN";
+                }
+            }
+
+            touchStartX = 0;
+            touchStartY = 0;
+        }
+
+        function changeDirection(e) {
+            if (e.key === " ") {
+                e.preventDefault();
+                togglePause();
+                return;
+            }
+
+            if (isPaused) return;
+
+            if (e.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
+            if (e.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
+            if (e.key === "ArrowRight" && direction !== "LEFT") direction = "RIGHT";
+            if (e.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const pauseOverlay = document.getElementById('pauseOverlay');
+            
+            if (isPaused) {
+                pauseOverlay.style.display = 'block';
+            } else {
+                pauseOverlay.style.display = 'none';
+            }
+        }
+
+        function draw() {
+            if (isPaused) return;
+
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, '#2c2c54');
+            gradient.addColorStop(1, '#40407a');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < snake.length; i++) {
+                if (i === 0) {
+                    ctx.shadowColor = '#ffd700';
+                    ctx.shadowBlur = 15;
+                    ctx.fillStyle = '#ffd700';
+                } else {
+                    ctx.shadowBlur = 5;
+                    ctx.fillStyle = '#ffb347';
+                }
+                
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+                
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+            }
+
+            ctx.shadowColor = '#ff4757';
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = '#ff4757';
+            ctx.fillRect(food.x, food.y, box, box);
+            
+            ctx.strokeStyle = '#ffffff';
+            ctx.strokeRect(food.x, food.y, box, box);
+
+            ctx.shadowBlur = 0;
+
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+
+            if (direction === "LEFT") snakeX -= box;
+            if (direction === "UP") snakeY -= box;
+            if (direction === "RIGHT") snakeX += box;
+            if (direction === "DOWN") snakeY += box;
+
+            if (snakeX === food.x && snakeY === food.y) {
+                score++;
+                updateScoreDisplay();
+                food = generateFood();
+                
+                while (collision(food, snake)) {
+                    food = generateFood();
+                }
+            } else {
+                snake.pop();
+            }
+
+            let newHead = {x: snakeX, y: snakeY};
+
+            if (snakeX < 0 || snakeY < 0 || snakeX >= canvas.width || snakeY >= canvas.height || collision(newHead, snake)) {
+                gameOver();
+                return;
+            }
+
+            snake.unshift(newHead);
+        }
+
+        function collision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x === array[i].x && head.y === array[i].y) return true;
+            }
+            return false;
+        }
+
+        function gameOver() {
+            clearInterval(game);
+            document.getElementById('finalScore').textContent = `Score Final: ${score}`;
+            document.getElementById('gameOverModal').style.display = 'flex';
+        }
+
+        function restartGame() {
+            snake = [{x: 9 * box, y: 10 * box}];
+            direction = "RIGHT";
+            food = generateFood();
+            score = 0;
+            isPaused = false;
+            
+            updateScoreDisplay();
+            document.getElementById('gameOverModal').style.display = 'none';
+            document.getElementById('pauseOverlay').style.display = 'none';
+            
+            clearInterval(game);
+            game = setInterval(draw, 120);
+        }
+
+        updateScoreDisplay();
+        game = setInterval(draw, 120);
+    </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'997d2ac30516cfc7',t:'MTc2MjAxODcxOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
